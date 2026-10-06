@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>均線趨勢過濾的數值分析 — 分析模組 A–E 互動式心智圖</title>
+<!-- 載入官方完整版 D3.js v7 -->
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<style>
+  :root {
+    --bg-main: #f8fafc;
+    --text-main: #1e293b;
+    --border-color: #cbd5e1;
+    --card-bg: #ffffff;
+    --fail-color: #dc2626;
+    --pass-color: #16a34a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    background: var(--bg-main);
+    color: var(--text-main);
+    overflow: hidden;
+  }
+  #header {
+    background: #ffffff;
+    border-bottom: 1px solid var(--border-color);
+    padding: 10px 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    z-index: 10;
+    position: relative;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .title-group {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .title-group h1 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: #0f172a;
+    letter-spacing: -0.01em;
+  }
+  .title-group .subtitle {
+    font-size: 13px;
+    color: #64748b;
+  }
+  #controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .btn {
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 6px 12px;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #334155;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .btn:hover {
+    background: #f1f5f9;
+    border-color: #94a3b8;
+    color: #0f172a;
+  }
+  .btn-primary {
+    background: #2563eb;
+    border-color: #1d4ed8;
+    color: #ffffff;
+  }
+  .btn-primary:hover {
+    background: #1d4ed8;
+    color: #ffffff;
+  }
+  .legend-bar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 12px;
+    color: #64748b;
+    margin-left: 8px;
+    border-left: 1px solid #e2e8f0;
+    padding-left: 12px;
+  }
+  .legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .badge-fail {
+    display: inline-block;
+    width: 20px;
+    height: 10px;
+    border: 1.8px dashed #c27c5c;
+    border-radius: 2px;
+    background: #fff;
+  }
+  .tip-text {
+    font-size: 12px;
+    color: #64748b;
+  }
+  #mm-container {
+    width: 100vw;
+    height: calc(100vh - 54px);
+    position: relative;
+    background: radial-gradient(circle at 50% 50%, #ffffff 0%, #f1f5f9 100%);
+  }
+  #mm svg {
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+  }
+  #mm svg:active {
+    cursor: grabbing;
+  }
+  g.nd rect {
+    transition: stroke-width .2s, filter .2s;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.04));
+  }
+  g.nd:hover rect {
+    stroke-width: 2.8px !important;
+    filter: drop-shadow(0 4px 10px rgba(0,0,0,0.12));
+  }
+  g.nd text {
+    user-select: none;
+  }
+</style>
+</head>
+<body>
+<div id="header">
+  <div class="title-group">
+    <h1>均線趨勢過濾的數值分析 — 核心架構互動心智圖</h1>
+    <span class="subtitle">六大模組 (A–E) • 理論驗證 • 實證發現</span>
+  </div>
+  <div id="controls">
+    <button class="btn btn-primary" id="bOpen">展開全部</button>
+    <button class="btn" id="bClose">收合全部</button>
+    <button class="btn" id="bFit">最佳視野</button>
+    <div class="legend-bar">
+      <div class="legend-item"><span class="badge-fail"></span> 包含事前驗收 FAIL 項目（誠實報告）</div>
+      <span class="tip-text">💡 提示：點擊節點展開/收合細節；滾輪縮放；拖曳畫布</span>
+    </div>
+  </div>
+</div>
+
+<div id="mm-container">
+  <div id="mm" style="width:100%;height:100%;">
+    <svg></svg>
+  </div>
+</div>
+
+<script>
+const DATA = {
+  "name": "均線趨勢過濾\n數值分析核心", 
+  "children": [
+    {
+      "id": "A", 
+      "name": "A  取樣離散化與外插", 
+      "fill": "#EBF2F7", 
+      "line": "#3B82F6", 
+      "children": [
+        {"id": "A_0", "name": "核心問題", "detail": "週頻資料是否嚴重低估日頻實體最大回撤 (MDD)？", "fail": false}, 
+        {"id": "A_1", "name": "數值方法", "detail": "取樣步長 h ∈ {1..21} 筆，均勻平移消除起點偶然性\n擬合 MDD(h) = MDD0 + c*h^p (p=0.5, 1.0)\nRichardson 外插估算連續極限 MDD0", "fail": false}, 
+        {"id": "A_2", "name": "實證結果", "detail": "急跌視窗 (2026 夏季) 週頻低估日頻回撤達 6.6 個百分點 (23.7% vs 30.4%)\n全期 Richardson 外插差距大於位移，判定不具辨識力 (FAIL)", "fail": true}
+      ]
+    }, 
+    {
+      "id": "B", 
+      "name": "B  濾波延遲與趨勢訊雜比", 
+      "fill": "#EDF7EE", 
+      "line": "#10B981", 
+      "children": [
+        {"id": "B_0", "name": "核心問題", "detail": "濾波延遲是代價，還是識別大趨勢的必要代價？", "fail": false}, 
+        {"id": "B_1", "name": "數值方法", "detail": "分析 SMA / EMA / 區域線性迴歸\n頻率響應 freqz 與群延遲 group_delay\n隨機漫步下價格與均線差距的雜訊標準差\n歷史空頭 (GFC, COVID, 2026) 實測出場延遲", "fail": false}, 
+        {"id": "B_2", "name": "實證結果", "detail": "SMA 群延遲嚴格等於 (L-1)/2 週 (誤差 0.0000)\n零延遲濾波器趨勢訊雜比 = 0，證明延遲本身就是訊號來源！\n真實空頭出場僅需 2~7 週，遠快於理論斜坡延遲 12.5~19.5 週", "fail": false}
+      ]
+    }, 
+    {
+      "id": "C", 
+      "name": "C  最佳化曲面與兩平成本", 
+      "fill": "#FEF8EC", 
+      "line": "#F59E0B", 
+      "children": [
+        {"id": "C_0", "name": "核心問題", "detail": "最佳均線長度是尖峰還是平原？換手成本多高時失效？", "fail": false}, 
+        {"id": "C_1", "name": "數值方法", "detail": "雙維網格掃描 (L: 10..80, 成本: 0..1%)\n配對區塊拔靴法 (Block Bootstrap, 13週區塊, 300次抽樣)\n黃金分割單峰搜尋 vs 二分法/割線法求根", "fail": false}, 
+        {"id": "C_2", "name": "實證結果", "detail": "Calmar 最佳參數落在 L = 12~20 週寬廣平原 (非過擬合尖峰)\n曲面階梯斷崖對應決定全期 MDD 的空頭事件切換\nCalmar 兩平成本高達 1.6%~2.6%，但 CAGR 零成本即輸 B&H", "fail": false}
+      ]
+    }, 
+    {
+      "id": "C2", 
+      "name": "C2  特徵共線性與最佳化收斂", 
+      "fill": "#F5F3FF", 
+      "line": "#8B5CF6", 
+      "children": [
+        {"id": "C2_0", "name": "核心問題", "detail": "12 個價格預測特徵共線性有多嚴重？二階牛頓法收斂多快？", "fail": false}, 
+        {"id": "C2_1", "name": "數值方法", "detail": "特徵相關矩陣、SVD 奇異值分解、條件數 κ(X)\nRidge 正則化誘導條件數分析\nL2 正則化 Logistic 迴歸：牛頓法 (IRLS) vs 梯度下降 (GD)", "fail": false}, 
+        {"id": "C2_2", "name": "實證結果", "detail": "整體條件數 κ=21.6 屬中度共線，報酬與趨勢特徵組內相關 ~0.9\n牛頓法 8 次迭代超線性收斂，梯度下降需 1754 次迭代 (誤差比 0.992)", "fail": false}
+      ]
+    }, 
+    {
+      "id": "D", 
+      "name": "D  SDE 模擬、蒙地卡羅與公平基準", 
+      "fill": "#FDF2F0", 
+      "line": "#EC4899", 
+      "children": [
+        {"id": "D_0", "name": "核心問題", "detail": "歷史獨立空頭太少，隨機微分方程模擬能否驗證均線優勢？", "fail": false}, 
+        {"id": "D_1", "name": "數值方法", "detail": "幾何布朗運動 (GBM) 與兩狀態馬可夫模型校準\nEuler-Maruyama (階數0.5) vs Milstein (階數1.0) 收斂階實測\n設計「相同曝險固定比例基準 (Const26/40)」排除少持股假象\n蒙地卡羅 2000 條路徑 + 對偶變數 (Antithetic) 降變異", "fail": false}, 
+        {"id": "D_2", "name": "實證結果與修正", "detail": "無動能模型中，均線對相同曝險基準 MDD 勝率僅 11%~17%\n歷史 MA26 Calmar (0.752) 落在模擬前 0.25% (罕見事件)\nLo-MacKinlay 檢定證實歷史存在 13~26 週中期動能 (VR=1.42)\n→ 均線在無動能下無優勢，但在真實動能市場極為有效！", "fail": false}
+      ]
+    }, 
+    {
+      "id": "E", 
+      "name": "E  插值誤差與幾何特性", 
+      "fill": "#F0FDFA", 
+      "line": "#14B8A6", 
+      "children": [
+        {"id": "E_0", "name": "核心問題", "detail": "數值分析教科書上的高階多項式插值階數，是否適用於價格序列？", "fail": false}, 
+        {"id": "E_1", "name": "數值方法", "detail": "線性 / 三次樣條 (Cubic Spline) / 保形三次 (PCHIP)\n基準平滑函數 sin(2πx) 驗證理論收斂階數 O(h^2), O(h^4)\nRunge 現象驗證：等距節點 vs Chebyshev 節點", "fail": false}, 
+        {"id": "E_2", "name": "實證結果", "detail": "平滑函數三次樣條因前漸近效應斜率 4.89 (初判 FAIL)，縮小步長收斂至 4.01\n真實金融路徑插值階數僅 ~0.4，樣條誤差甚至劣於線性插值！\n金融序列本質粗糙非平滑，盲用高階插值毫無意義", "fail": true}
+      ]
+    }
+  ]
+};
+
+const FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans TC", sans-serif';
+const box = document.getElementById("mm-container");
+const W = () => box.clientWidth;
+const H = () => box.clientHeight;
+const svg = d3.select("#mm svg");
+const g = svg.append("g");
+const zoom = d3.zoom().scaleExtent([0.25, 2.5]).on("zoom", e => g.attr("transform", e.transform));
+svg.call(zoom).on("dblclick.zoom", null);
+
+const linkG = g.append("g");
+const nodeG = g.append("g");
+const ctx = document.createElement("canvas").getContext("2d");
+const tw = (s, size, bold) => { 
+  ctx.font = `${bold ? "bold " : ""}${size}px ${FONT}`; 
+  return ctx.measureText(s).width; 
+};
+
+// 樹狀結構初始化
+const root = DATA; 
+root.id = "root"; 
+root.depth = 0;
+root.children.forEach((m, i) => {
+  Object.assign(m, {depth: 1, side: i < 3 ? 1 : -1, open: true, parent: root});
+  m.children.forEach(c => Object.assign(c, {depth: 2, side: m.side, open: true, parent: m, fill: m.fill, line: m.line}));
+});
+
+const FAILC = "#DC2626", PADX = 14, PADY = 9, LH = 20, VGAP = 14, HGAP = 46;
+
+function size(n) {
+  let L;
+  if (n.depth === 0) {
+    L = n.name.split("\n").map(t => ({t, b: true, s: 15}));
+  } else if (n.depth === 1) {
+    L = [{t: n.name + (n.open ? "  ▾" : "  ▸"), b: true, s: 14}];
+  } else {
+    L = [{t: n.name + (n.fail ? "  [誠實 FAIL]" : "") + (n.open ? "  ▾" : "  ▸"), b: true, s: 13}];
+    if (n.open) {
+      n.detail.split("\n").forEach(t => L.push({t, b: false, s: 12}));
+    }
+  }
+  n.lines = L;
+  n.w = Math.max(...L.map(l => tw(l.t, l.s, l.b))) + PADX * 2 + (n.depth === 0 ? 20 : 0);
+  n.h = L.length * LH + PADY * 2;
+}
+
+const kids = n => n.depth === 0 ? n.children : (n.depth === 1 && n.open ? n.children : []);
+
+function measure(n) {
+  size(n); 
+  const k = kids(n); 
+  k.forEach(measure);
+  n.kh = k.reduce((a, c) => a + c.sh, 0) + Math.max(0, k.length - 1) * VGAP;
+  n.sh = Math.max(n.h, n.kh);
+}
+
+function place(n, x, top) {
+  n.x = x; 
+  n.y = top + n.sh / 2; 
+  let y = n.y - n.kh / 2;
+  kids(n).forEach(c => { 
+    place(c, x + c.side * (n.w / 2 + HGAP + c.w / 2), y); 
+    y += c.sh + VGAP; 
+  });
+}
+
+function layout() {
+  size(root); 
+  root.x = 0; 
+  root.y = 0;
+  root.children.forEach(measure);
+  [1, -1].forEach(side => {
+    const ms = root.children.filter(m => m.side === side);
+    const tot = ms.reduce((a, m) => a + m.sh, 0) + (ms.length - 1) * VGAP * 2;
+    let y = -tot / 2;
+    ms.forEach(m => { 
+      place(m, side * (root.w / 2 + HGAP * 1.4 + m.w / 2), y); 
+      y += m.sh + VGAP * 2; 
+    });
+  });
+}
+
+function visible() {
+  const ns = [root], ls = [];
+  root.children.forEach(m => { 
+    ns.push(m); 
+    ls.push([root, m]); 
+    kids(m).forEach(c => { 
+      ns.push(c); 
+      ls.push([m, c]); 
+    }); 
+  });
+  return {ns, ls};
+}
+
+function path(a, b) {
+  const s = b.side;
+  const x1 = a.x + s * a.w / 2;
+  const x2 = b.x - s * b.w / 2;
+  const mx = (x1 + x2) / 2;
+  return `M${x1},${a.y}C${mx},${a.y} ${mx},${b.y} ${x2},${b.y}`;
+}
+
+function render() {
+  layout(); 
+  const {ns, ls} = visible(); 
+
+  const linkSel = linkG.selectAll("path").data(ls, d => d[1].id);
+  linkSel.exit().remove();
+  linkSel.enter().append("path")
+    .attr("fill", "none")
+    .merge(linkSel)
+    .attr("stroke", d => d[1].line)
+    .attr("stroke-width", d => d[1].depth === 1 ? 2.4 : 1.4)
+    .attr("opacity", 0.75)
+    .attr("d", d => path(d[0], d[1]));
+
+  const sel = nodeG.selectAll("g.nd").data(ns, d => d.id);
+  sel.exit().remove();
+  const en = sel.enter().append("g").attr("class", "nd")
+    .style("cursor", "pointer")
+    .on("click", (e, d) => toggle(d));
+  en.append("rect"); 
+  en.append("text");
+
+  const all = en.merge(sel);
+  all.attr("transform", d => `translate(${d.x},${d.y})`);
+  
+  all.select("rect")
+    .attr("x", d => -d.w / 2).attr("y", d => -d.h / 2)
+    .attr("width", d => d.w).attr("height", d => d.h)
+    .attr("rx", d => d.depth === 0 ? 20 : d.depth === 1 ? 8 : 6)
+    .attr("fill", d => d.depth === 0 ? "#0f172a" : d.depth === 1 ? d.fill : "#ffffff")
+    .attr("stroke", d => d.depth === 0 ? "#1e293b" : d.fail ? FAILC : d.line)
+    .attr("stroke-width", d => d.depth === 0 ? 2 : d.depth === 1 ? 2 : 1.2)
+    .attr("stroke-dasharray", d => d.fail ? "5,3" : null);
+
+  all.select("text")
+    .attr("text-anchor", d => d.depth === 2 ? "start" : "middle")
+    .each(function (d) {
+      const t = d3.select(this); 
+      t.selectAll("tspan").remove();
+      const y0 = -(d.lines.length - 1) * LH / 2;
+      d.lines.forEach((l, i) => {
+        t.append("tspan")
+          .attr("x", d.depth === 2 ? -d.w / 2 + PADX : 0)
+          .attr("y", y0 + i * LH)
+          .attr("dy", "0.35em")
+          .attr("font-size", l.s)
+          .attr("font-weight", l.b ? "600" : "normal")
+          .attr("fill", d.depth === 0 ? "#ffffff" : (i === 0 && d.fail ? FAILC : (i === 0 && d.depth === 2 ? d.line : "#1e293b")))
+          .text(l.t);
+      });
+    });
+}
+
+function toggle(d) {
+  if (d.depth === 0) { 
+    const any = root.children.some(m => !m.open); 
+    setAll(any, any); 
+    return; 
+  }
+  d.open = !d.open;
+  if (d.depth === 1 && !d.open) {
+    d.children.forEach(c => c.open = false);
+  }
+  render();
+}
+
+function setAll(mod, leaf) {
+  root.children.forEach(m => { 
+    m.open = mod; 
+    m.children.forEach(c => c.open = leaf); 
+  });
+  render(); 
+  setTimeout(fit, 100);
+}
+
+function fit() {
+  const b = g.node().getBBox(); 
+  if (!b.width || !b.height) return;
+  const s = Math.min(1.4, 0.88 * Math.min(W() / b.width, H() / b.height));
+  const tx = W() / 2 - s * (b.x + b.width / 2);
+  const ty = H() / 2 - s * (b.y + b.height / 2);
+  svg.call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(s));
+}
+
+document.getElementById("bOpen").onclick = () => setAll(true, true);
+document.getElementById("bClose").onclick = () => setAll(false, false);
+document.getElementById("bFit").onclick = fit;
+
+window.addEventListener("resize", fit);
+
+// 初始化視野
+render();
+setTimeout(fit, 150);
+</script>
+</body>
+</html>
