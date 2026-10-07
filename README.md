@@ -1,3 +1,5 @@
+![QR Code](https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://github.com/b0952948253-commits/Numerical-Analysis-of-Moving-Average-Trend-Filtering)
+
 # 均線趨勢過濾的數值分析：離散化誤差、濾波延遲、最佳化曲面與隨機模擬收斂
 ### Numerical Analysis of Moving Average Trend Filtering: Discretization Error, Filter Delay, Optimization Surface, and Stochastic Simulation Convergence
 
